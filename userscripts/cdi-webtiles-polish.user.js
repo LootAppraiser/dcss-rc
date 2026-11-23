@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CDI WebTiles Polish
 // @namespace    https://github.com/LootAppraiser
-// @version      2.2.1
+// @version      2.2.2
 // @description  crawl.dcss.io: Maple Mono (woff2) everywhere in game and lobby, plus a clean lobby with a header bar, grouped Play buttons, a readable games table and the DWEM recordings list
 // @match        https://crawl.dcss.io/*
 // @run-at       document-idle
@@ -365,9 +365,7 @@
   .wt-pn-older .wt-pn-groups { padding: 0 18px 8px 30px; }
   .wt-pn-older .wt-pn-group { padding: 6px 0; border-top: 1px dashed var(--wt-border-soft); }
   .wt-pn-older .wt-pn-group:first-child { border-top: 0; }
-  .wt-pn-older .wt-pn-ver { width: 64px; font-size: 11px; }
-  .wt-pn-older .wt-game { background: transparent; }
-  #lobby .wt-pn-older .wt-game a:link, #lobby .wt-pn-older .wt-game a:visited { font-size: 12px; padding: 4px 10px; }
+  /* buttons keep the exact same look as above; only the row rhythm differs */
 
   /* ---------- games table ---------- */
   #lobby_body { order: 2; text-align: left; overflow: clip; }
