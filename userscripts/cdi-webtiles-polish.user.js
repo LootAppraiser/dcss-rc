@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CDI WebTiles Polish
 // @namespace    https://github.com/LootAppraiser
-// @version      2.2.0
+// @version      2.2.1
 // @description  crawl.dcss.io: Maple Mono (woff2) everywhere in game and lobby, plus a clean lobby with a header bar, grouped Play buttons, a readable games table and the DWEM recordings list
 // @match        https://crawl.dcss.io/*
 // @run-at       document-idle
@@ -741,12 +741,12 @@
     main.push.apply(main, gitGroups);                               // trunk
     var older = stableGroups;                                       // the rest, newest first
 
-    function renderGroup(g, accent) {
+    function renderGroup(g) {
       var row = el('div', 'wt-pn-group');
       row.appendChild(el('div', 'wt-pn-ver' + (g.isGit ? ' is-git' : ''), g.label || '-'));
       var games = el('div', 'wt-pn-games');
       g.games.forEach(function (gm, i) {
-        var primary = accent && (gm.mode === 'dcss' || (i === 0 && !g.games.some(function (x) { return x.mode === 'dcss'; })));
+        var primary = gm.mode === 'dcss' || (i === 0 && !g.games.some(function (x) { return x.mode === 'dcss'; }));
         var box = el('span', 'wt-game' + (primary ? ' is-primary' : ''));
         gm.a.textContent = gm.label;
         box.appendChild(gm.a);
@@ -762,14 +762,14 @@
     }
 
     var wrap = el('div', 'wt-pn-groups');
-    main.forEach(function (g, i) { wrap.appendChild(renderGroup(g, i === 0)); });
+    main.forEach(function (g) { wrap.appendChild(renderGroup(g)); });
     root.appendChild(wrap);
 
     if (older.length) {
       var det = el('details', 'wt-pn-older');
       det.appendChild(el('summary', null, 'Older versions (' + older.length + ')'));
       var ow = el('div', 'wt-pn-groups');
-      older.forEach(function (g) { ow.appendChild(renderGroup(g, false)); });
+      older.forEach(function (g) { ow.appendChild(renderGroup(g)); });
       det.appendChild(ow);
       // stay open/closed the way the player left it while the lobby keeps updating
       try { det.open = sessionStorage.getItem('wt-pn-older') === '1'; } catch (e) { /* ignore */ }
