@@ -21,8 +21,8 @@ turns, and open an issue with it.
 | `fx_*` lines | [dcss-fx](https://github.com/LootAppraiser/dcss-fx) (smooth movement, attack effects, light) on top of DWEM |
 | BRC section at the bottom | nothing, it is plain Lua in the rc |
 
-Without DWEM or dcss-fx the `fx_*`/sound lines are simply ignored by your browser; crawl itself does not
-use them.
+The `fx_*` and sound lines are only read by the browser extensions, not by crawl. Without them they do
+nothing; crawl may mention them as unknown options at startup, which is harmless.
 
 ## What is in it
 
