@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CDI WebTiles Polish
 // @namespace    https://github.com/LootAppraiser
-// @version      2.1.0
+// @version      2.2.0
 // @description  crawl.dcss.io: Maple Mono (woff2) everywhere in game and lobby, plus a clean lobby with a header bar, grouped Play buttons, a readable games table and the DWEM recordings list
 // @match        https://crawl.dcss.io/*
 // @run-at       document-idle
@@ -340,6 +340,34 @@
   #lobby .wt-game.is-primary a.edit_rc_link { color: rgba(29, 21, 5, .7); border-left-color: rgba(0, 0, 0, .18); }
   .wt-pn-extra { padding: 10px 18px 14px; border-top: 1px solid var(--wt-border-soft); font-size: 13px; }
   .wt-pn-extra a { margin-right: 16px; }
+  /* older versions fold away: the card answers "how do I play" in two rows */
+  .wt-pn-older { border-top: 1px solid var(--wt-border-soft); }
+  .wt-pn-older > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 10px 18px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--wt-muted);
+    user-select: none;
+  }
+  .wt-pn-older > summary::-webkit-details-marker { display: none; }
+  .wt-pn-older > summary::before {
+    content: '▸';
+    display: inline-block;
+    width: 1.1em;
+    color: var(--wt-muted);
+  }
+  .wt-pn-older[open] > summary::before { content: '▾'; }
+  .wt-pn-older > summary:hover { color: var(--wt-text); }
+  .wt-pn-older .wt-pn-groups { padding: 0 18px 8px 30px; }
+  .wt-pn-older .wt-pn-group { padding: 6px 0; border-top: 1px dashed var(--wt-border-soft); }
+  .wt-pn-older .wt-pn-group:first-child { border-top: 0; }
+  .wt-pn-older .wt-pn-ver { width: 64px; font-size: 11px; }
+  .wt-pn-older .wt-game { background: transparent; }
+  #lobby .wt-pn-older .wt-game a:link, #lobby .wt-pn-older .wt-game a:visited { font-size: 12px; padding: 4px 10px; }
 
   /* ---------- games table ---------- */
   #lobby_body { order: 2; text-align: left; overflow: clip; }
@@ -657,6 +685,22 @@
 
   // ---- play now: rebuild the server's free-form links into version rows ----
   // Anchors are moved, not cloned, so the client's .edit_rc_link click handlers survive.
+  // The newest stable and trunk stay in the open; anything older folds into one disclosure.
+  function isGitVer(v) {
+    return /git|trunk|a\d+$/i.test(v || '');
+  }
+
+  function verKey(v) {
+    var m = /^(\d+)\.(\d+)(?:\.(\d+))?/.exec(v || '');
+    return m ? [+m[1], +m[2], +(m[3] || 0)] : [-1, 0, 0];
+  }
+
+  function newestFirst(a, b) {
+    var x = verKey(a.ver), y = verKey(b.ver);
+    for (var i = 0; i < 3; i++) if (x[i] !== y[i]) return y[i] - x[i];
+    return 0;
+  }
+
   function layoutPlayNow() {
     var pn = document.getElementById('play_now');
     if (!pn || pn.querySelector('.wt-pn')) return;
@@ -671,7 +715,7 @@
       var mode = m ? m[1] : id;
       var ver = m ? m[2] : '';
       if (!byVer[ver]) {
-        var isGit = /git|trunk/i.test(ver);
+        var isGit = isGitVer(ver);
         byVer[ver] = { ver: ver, label: isGit ? 'trunk' : ver, isGit: isGit, games: [] };
         groups.push(byVer[ver]);
       }
@@ -690,13 +734,19 @@
     head.appendChild(el('span', 'wt-card-meta', 'rc edits the options file for that game'));
     root.appendChild(head);
 
-    var wrap = el('div', 'wt-pn-groups');
-    groups.forEach(function (g) {
+    var gitGroups = groups.filter(function (g) { return g.isGit; });
+    var stableGroups = groups.filter(function (g) { return !g.isGit; }).sort(newestFirst);
+    var main = [];
+    if (stableGroups.length) main.push(stableGroups.shift());       // newest stable
+    main.push.apply(main, gitGroups);                               // trunk
+    var older = stableGroups;                                       // the rest, newest first
+
+    function renderGroup(g, accent) {
       var row = el('div', 'wt-pn-group');
       row.appendChild(el('div', 'wt-pn-ver' + (g.isGit ? ' is-git' : ''), g.label || '-'));
       var games = el('div', 'wt-pn-games');
       g.games.forEach(function (gm, i) {
-        var primary = gm.mode === 'dcss' || (i === 0 && !g.games.some(function (x) { return x.mode === 'dcss'; }));
+        var primary = accent && (gm.mode === 'dcss' || (i === 0 && !g.games.some(function (x) { return x.mode === 'dcss'; })));
         var box = el('span', 'wt-game' + (primary ? ' is-primary' : ''));
         gm.a.textContent = gm.label;
         box.appendChild(gm.a);
@@ -708,9 +758,26 @@
         games.appendChild(box);
       });
       row.appendChild(games);
-      wrap.appendChild(row);
-    });
+      return row;
+    }
+
+    var wrap = el('div', 'wt-pn-groups');
+    main.forEach(function (g, i) { wrap.appendChild(renderGroup(g, i === 0)); });
     root.appendChild(wrap);
+
+    if (older.length) {
+      var det = el('details', 'wt-pn-older');
+      det.appendChild(el('summary', null, 'Older versions (' + older.length + ')'));
+      var ow = el('div', 'wt-pn-groups');
+      older.forEach(function (g) { ow.appendChild(renderGroup(g, false)); });
+      det.appendChild(ow);
+      // stay open/closed the way the player left it while the lobby keeps updating
+      try { det.open = sessionStorage.getItem('wt-pn-older') === '1'; } catch (e) { /* ignore */ }
+      det.addEventListener('toggle', function () {
+        try { sessionStorage.setItem('wt-pn-older', det.open ? '1' : '0'); } catch (e) { /* ignore */ }
+      });
+      root.appendChild(det);
+    }
 
     var extras = Array.prototype.slice.call(pn.querySelectorAll('a')).filter(function (a) { return !used.has(a); });
     if (extras.length) {
