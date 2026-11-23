@@ -82,6 +82,10 @@ bgm_volume = 0.3
 ##### Gold in the status panel (DWEM ConvenienceModule) #####
 show_gold_status = true
 
+##### Game recording (DWEM WTRec) #####
+# Records each game in your browser and saves it when you return to the lobby. In chat: /wtrec list | download | delete.
+record_wtrec = true
+
 ##### Keys #####
 # Ctrl-Tab: autofight without moving (note: browsers may grab Ctrl-Tab to switch tabs)
 bindkey = [\{-222}] CMD_AUTOFIGHT_NOMOVE

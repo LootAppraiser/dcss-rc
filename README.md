@@ -18,6 +18,7 @@ turns, and open an issue with it.
 | Plain crawl options (travel, explore, safety, autofight, menus) | nothing |
 | `tile_font_*` lines | the [Maple Mono NF](https://github.com/subframe7536/maple-font) font installed on your computer (otherwise delete those lines) |
 | `sounds_on`, `sound_pack`, `bgm_volume`, `show_gold_status` | [DWEM](https://github.com/refracta/dcss-webtiles-extension-module) in Tampermonkey (sound packs, gold in the status panel) |
+| `record_wtrec` | DWEM (its WTRec module records games in your browser; `/wtrec list` in chat shows them) |
 | `fx_*` lines | [dcss-fx](https://github.com/LootAppraiser/dcss-fx) (smooth movement, attack effects, light) on top of DWEM |
 | BRC section at the bottom | nothing, it is plain Lua in the rc |
 
