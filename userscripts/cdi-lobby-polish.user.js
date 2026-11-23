@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         CDI Lobby Polish
 // @namespace    https://github.com/LootAppraiser
-// @version      1.1.0
-// @description  Tidier crawl.dcss.io lobby: dark card layout, readable games table, no Patreon block, DWEM recordings list
+// @version      2.0.0
+// @description  Clean crawl.dcss.io lobby: header bar, card layout, readable games table, grouped Play buttons, DWEM recordings list
 // @match        https://crawl.dcss.io/*
 // @run-at       document-idle
 // @grant        none
@@ -18,200 +18,487 @@
 
   var CFG = {
     hidePatreon: true,
-    hideServerNotes: false, // the SSH / Code of Conduct / contact paragraph
+    hideServerNotes: false, // the SSH / Code of Conduct / contact lines in the footer
     hideLoginForm: false,
+    idleDimSeconds: 300,    // rows idle at least this long are dimmed (0 = never)
   };
 
-  var css = `
+  // Maple Mono (OFL-1.1): a local install wins, else the fontsource woff2.
+  var FONT_CDN = 'https://cdn.jsdelivr.net/npm/@fontsource/maple-mono@5.3.0/files/maple-mono-latin-';
+  var fontFaces = [[400, 'Regular'], [500, 'Medium'], [600, 'SemiBold'], [700, 'Bold']].map(function (w) {
+    return '@font-face { font-family: "WT Maple Mono"; font-style: normal; font-weight: ' + w[0] + '; font-display: swap; ' +
+      'src: local("Maple Mono ' + w[1] + '"), local("MapleMono-' + w[1] + '"), local("Maple Mono NF ' + w[1] + '"), local("MapleMono-NF-' + w[1] + '"), ' +
+      'url("' + FONT_CDN + w[0] + '-normal.woff2") format("woff2"); }';
+  }).join('\n');
+
+  var css = fontFaces + `
   :root {
-    --bg: #0d1117;
-    --panel: #161b22;
-    --panel2: #12171d;
-    --line: #30363d;
-    --fg: #e6edf3;
-    --muted: #8b949e;
-    --accent: #7ee787;
-    --accent-dim: #2ea043;
+    --wt-bg: #0b0d11;
+    --wt-surface: #12151b;
+    --wt-surface-2: #181c24;
+    --wt-hover: #1a1f29;
+    --wt-input: #0e1116;
+    --wt-border: #242a35;
+    --wt-border-soft: #1b2029;
+    --wt-text: #e7e9ee;
+    --wt-text-2: #b3b9c5;
+    --wt-muted: #7a8294;
+    --wt-accent: #e5b45a;
+    --wt-accent-ink: #1d1505;
+    --wt-accent-soft: rgba(229, 180, 90, .14);
+    --wt-git: #b69cff;
+    --wt-seeded: #6ccfdc;
+    --wt-mode: #f0a37a;
+    --wt-live: #5fd08a;
+    --wt-danger: #f07373;
+    --wt-ui: "WT Maple Mono", "Maple Mono", "Maple Mono NF", "DejaVu Sans Mono", monospace;
+    --wt-mono: var(--wt-ui);
   }
-  html, body { background: var(--bg) !important; color: var(--fg); }
-  body {
-    font-size: 15px;
-    background-image: radial-gradient(1200px 400px at 50% -120px, #16202b 0%, transparent 70%);
-    background-repeat: no-repeat;
-  }
-  a, a:visited { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
+  html, body { background: var(--wt-bg) !important; color: var(--wt-text); }
 
-  #lobby { max-width: 1180px; margin: 0 auto; padding: 14px 20px 40px; }
-
-  /* top-right account bar */
-  .login_placeholder { text-align: right; font-size: 13px; color: var(--muted); margin: 2px 2px 10px; }
-  #login { float: none; text-align: right; }
-  #login .extra_links { color: var(--line); }
-  #login .extra_links a { margin: 0 2px; }
-  #login_form label { color: var(--muted); margin-right: 6px; }
-  #login_form { white-space: nowrap; }
-  #login_form input.text { width: 11em; }
-
-  /* banner card */
-  #banner > #banner {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 14px 18px 12px;
-    margin: 0 0 14px;
-    line-height: 1.5;
-  }
-  .wt-title { font-size: 20px; font-weight: 600; letter-spacing: .2px; margin-bottom: 8px; }
-  #banner > #banner > p {
-    background: none !important;
-    border-radius: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    color: var(--muted);
+  #lobby {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 24px 48px;
+    font-family: var(--wt-ui);
     font-size: 13px;
-    line-height: 1.6;
+    line-height: 1.5;
+    color: var(--wt-text);
+    -webkit-font-smoothing: antialiased;
   }
+  #lobby input, #lobby button, #lobby textarea, #lobby select,
+  .floating_dialog, .floating_dialog input, .floating_dialog button { font-family: var(--wt-ui); }
+  #lobby > br { display: none; }
 
-  /* play now card */
-  #play_now {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 14px 18px 16px;
-    margin: 0 0 14px;
+  #lobby a:link, #lobby a:visited, .floating_dialog a:link, .floating_dialog a:visited {
+    color: var(--wt-accent);
+    font-weight: 500;
+    text-decoration: none;
+  }
+  #lobby a:hover, .floating_dialog a:hover { color: var(--wt-text); text-decoration: none; }
+
+  /* ---------- header bar ---------- */
+  #lobby > .login_placeholder {
+    order: 0;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 28px;
+    min-height: 36px;
+    padding: 14px 0;
+    margin: 0 0 22px;
+    border-bottom: 1px solid var(--wt-border);
     text-align: left;
-    line-height: 1.9;
+    font-size: 13px;
+    color: var(--wt-text-2);
   }
-  #play_now a {
-    display: inline-block;
-    padding: 2px 10px;
-    margin: 2px 1px;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: var(--panel2);
-    color: var(--fg);
-  }
-  #play_now a:hover { border-color: var(--accent-dim); color: var(--accent); text-decoration: none; }
-  #play_now table { margin: 6px 0 0; border-collapse: collapse; }
-  #play_now td, #play_now th { padding: 2px 10px; }
-  #play_now hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
-  /* server markup varies; every row is rebuilt as its own left-aligned block */
-  #play_now { white-space: normal !important; }
-  #play_now .wt-row {
-    display: block;
-    text-align: left !important;
-    white-space: normal !important;
-    margin: 3px 0;
-  }
-  /* CDI's server-side play-now markup centres itself; force the block left */
-  #play_now, #play_now * { text-align: left !important; }
-  #play_now table { margin: 6px 0 0 !important; }
-  #play_now [align="center"] { margin-left: 0 !important; margin-right: 0 !important; }
-
-  /* games list */
-  #lobby_body { text-align: left; }
-  #lobby_body > span {
-    display: block;
+  .wt-brand { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+  .wt-logo {
+    background: var(--wt-accent);
+    color: var(--wt-accent-ink);
     font-size: 11px;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin: 4px 2px 8px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    padding: 4px 7px;
+    border-radius: 6px;
   }
-  #player_list {
-    width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    overflow: hidden;
+  .wt-brand-name { font-size: 15px; font-weight: 600; color: var(--wt-text); }
+  #wt-nav { display: flex; flex-wrap: wrap; gap: 4px 20px; flex: 1 1 auto; }
+  #lobby #wt-nav a:link, #lobby #wt-nav a:visited { color: var(--wt-text-2); font-weight: 500; }
+  #lobby #wt-nav a:hover { color: var(--wt-text); }
+
+  #lobby #login {
+    float: none;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-left: auto;
+    text-align: right;
+  }
+  #login_message:empty { display: none; }
+  #login_message { color: var(--wt-text-2); white-space: nowrap; }
+  #lobby #login_form { display: flex; align-items: center; gap: 8px; margin: 0; white-space: nowrap; }
+  #lobby #login_form label {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  #lobby #login_form input.text { width: 150px; }
+  #lobby #login .extra_links { font-size: 0; white-space: nowrap; }
+  #lobby #login .extra_links a { font-size: 13px; margin-left: 16px; }
+  #lobby #login .extra_links a:first-child { margin-left: 0; }
+
+  /* ---------- form controls ---------- */
+  #lobby input.text, .floating_dialog input.text {
+    box-sizing: border-box;
+    height: 32px;
+    padding: 0 10px;
+    background: var(--wt-input);
+    border: 1px solid var(--wt-border);
+    border-radius: 8px;
+    color: var(--wt-text);
+    font-size: 13px;
+    outline: none;
+    transition: border-color .12s, box-shadow .12s;
+  }
+  #lobby textarea, .floating_dialog textarea {
+    box-sizing: border-box;
+    padding: 10px 12px;
+    background: var(--wt-input);
+    border: 1px solid var(--wt-border);
+    border-radius: 8px;
+    color: var(--wt-text);
+    font-family: var(--wt-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    outline: none;
+  }
+  #lobby input.text:focus, .floating_dialog input.text:focus,
+  #lobby textarea:focus, .floating_dialog textarea:focus {
+    border-color: var(--wt-accent);
+    box-shadow: 0 0 0 3px var(--wt-accent-soft);
+  }
+  #lobby input::placeholder { color: var(--wt-muted); }
+  #lobby input.button, #lobby button, .floating_dialog input.button, .floating_dialog button {
+    box-sizing: border-box;
+    height: 32px;
+    padding: 0 14px;
+    background: var(--wt-surface-2);
+    border: 1px solid var(--wt-border);
+    border-radius: 8px;
+    color: var(--wt-text);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
+  }
+  #lobby input.button:hover, #lobby button:hover,
+  .floating_dialog input.button:hover, .floating_dialog button:hover { border-color: #3a4252; background: var(--wt-hover); }
+  #lobby input.button[type="submit"], .floating_dialog input.button[type="submit"], #lobby button.wt-primary {
+    background: var(--wt-accent);
+    border-color: var(--wt-accent);
+    color: var(--wt-accent-ink);
+  }
+  #lobby input.button[type="submit"]:hover, .floating_dialog input.button[type="submit"]:hover,
+  #lobby button.wt-primary:hover { background: #f0c575; border-color: #f0c575; }
+
+  /* ---------- cards ---------- */
+  #play_now, #lobby_body, #wt-recs, #admin_panel {
+    background: var(--wt-surface);
+    border: 1px solid var(--wt-border);
+    border-radius: 12px;
+    margin: 0 0 18px;
+  }
+  .wt-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 18px;
+    border-bottom: 1px solid var(--wt-border);
+  }
+  .wt-card-title { font-size: 14px; font-weight: 600; color: var(--wt-text); }
+  .wt-pill {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 18px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--wt-surface-2);
+    border: 1px solid var(--wt-border);
+    color: var(--wt-text-2);
     font-variant-numeric: tabular-nums;
   }
-  #player_list thead th {
+  .wt-card-meta { margin-left: auto; font-size: 12px; color: var(--wt-muted); }
+  .wt-live-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--wt-live);
+    margin-right: 6px;
+    vertical-align: 1px;
+  }
+
+  #account_restricted {
+    margin: 0 0 18px;
+    padding: 12px 16px;
+    border: 1px solid rgba(229, 180, 90, .35);
+    border-radius: 10px;
+    background: rgba(229, 180, 90, .07);
+    color: #f0d49b;
+  }
+  #admin_panel { padding: 14px 18px; }
+  #admin_panel hr { border: 0; border-top: 1px solid var(--wt-border); margin: 12px 0; }
+  #admin_panel_button { margin: 0 0 12px; }
+
+  /* ---------- play now ---------- */
+  #play_now { order: 1; padding: 0; text-align: left; }
+  #play_now:empty { display: none; }
+  #play_now:not(:has(.wt-pn)) { padding: 14px 18px; line-height: 2; }
+  .wt-pn-groups { padding: 4px 18px 6px; }
+  .wt-pn-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 0;
+    border-top: 1px solid var(--wt-border-soft);
+  }
+  .wt-pn-group:first-child { border-top: 0; }
+  .wt-pn-ver {
+    flex: none;
+    width: 72px;
+    font-family: var(--wt-mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--wt-muted);
+  }
+  .wt-pn-ver.is-git { color: var(--wt-git); }
+  .wt-pn-games { display: flex; flex-wrap: wrap; gap: 8px; }
+  .wt-game {
+    display: inline-flex;
+    align-items: stretch;
+    border: 1px solid var(--wt-border);
+    border-radius: 8px;
+    background: var(--wt-surface-2);
+    overflow: hidden;
+    transition: border-color .12s;
+  }
+  .wt-game:hover { border-color: #3a4252; }
+  #lobby .wt-game a:link, #lobby .wt-game a:visited {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px;
+    color: var(--wt-text);
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  #lobby .wt-game a:hover { background: var(--wt-hover); }
+  #lobby .wt-game a.edit_rc_link {
+    padding: 6px 9px;
+    border-left: 1px solid var(--wt-border);
+    color: var(--wt-muted);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+  }
+  #lobby .wt-game a.edit_rc_link:hover { color: var(--wt-text); }
+  .wt-game.is-primary { background: var(--wt-accent); border-color: var(--wt-accent); }
+  #lobby .wt-game.is-primary a:link, #lobby .wt-game.is-primary a:visited { color: var(--wt-accent-ink); font-weight: 700; }
+  #lobby .wt-game.is-primary a:hover { background: #f0c575; }
+  #lobby .wt-game.is-primary a.edit_rc_link { color: rgba(29, 21, 5, .7); border-left-color: rgba(0, 0, 0, .18); }
+  .wt-pn-extra { padding: 10px 18px 14px; border-top: 1px solid var(--wt-border-soft); font-size: 13px; }
+  .wt-pn-extra a { margin-right: 16px; }
+
+  /* ---------- games table ---------- */
+  #lobby_body { order: 2; text-align: left; overflow: clip; }
+  #lobby #player_list {
+    width: 100%;
+    margin: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: none;
+    line-height: 1.35;
+    font-variant-numeric: tabular-nums;
+  }
+  #lobby #player_list th {
     position: sticky;
     top: 0;
     z-index: 2;
-    background: #1b222b;
-    color: var(--muted);
+    width: auto;
+    padding: 9px 12px;
+    background: var(--wt-surface-2);
+    background-image: none;
+    border-bottom: 1px solid var(--wt-border);
+    color: var(--wt-muted);
     font-size: 11px;
     font-weight: 600;
-    letter-spacing: .08em;
+    letter-spacing: .06em;
     text-transform: uppercase;
-    padding: 8px;
-    border-bottom: 1px solid var(--line);
+    text-align: left;
     white-space: nowrap;
+    user-select: none;
   }
-  #player_list tbody td { padding: 5px 8px; border-bottom: 1px solid #21262d; white-space: nowrap; }
-  #player_list tbody tr:nth-child(even) { background: var(--panel2); }
-  #player_list tbody tr:hover { background: #1f2a1f; }
-  #player_list tbody tr:last-child td { border-bottom: 0; }
-  #player_list td.username { color: var(--accent); }
-  #player_list td.xl, #player_list td.turn, #player_list td.dur,
-  #player_list td.idle_time, #player_list td.spectator_count { text-align: right; }
-  #player_list td.milestone_col {
-    color: var(--muted);
-    font-style: italic;
-    max-width: 26em;
+  #lobby #player_list th.header:hover { color: var(--wt-text); }
+  #lobby #player_list th.headerSortDown, #lobby #player_list th.headerSortUp { color: var(--wt-text); }
+  #lobby #player_list th.headerSortDown::after,
+  #lobby #player_list th.headerSortUp::after {
+    content: "";
+    display: inline-block;
+    margin-left: 6px;
+    vertical-align: 2px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+  }
+  #lobby #player_list th.headerSortDown::after { border-top: 5px solid var(--wt-accent); }
+  #lobby #player_list th.headerSortUp::after { border-bottom: 5px solid var(--wt-accent); }
+  #lobby #player_list thead tr:hover { background: none; }
+
+  #lobby #player_list td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--wt-border-soft);
+    color: var(--wt-text-2);
+    font-size: 13.5px;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  #lobby #player_list th:first-child, #lobby #player_list td:first-child { padding-left: 18px; }
+  #lobby #player_list th:last-child, #lobby #player_list td:last-child { padding-right: 18px; }
+  #lobby #player_list tbody tr:last-child td { border-bottom: 0; }
+  #lobby #player_list tbody tr { transition: opacity .2s; }
+  #lobby #player_list tbody tr:hover { background: var(--wt-hover); }
+  #lobby #player_list tbody tr.wt-idle { opacity: .5; }
+  #lobby #player_list tbody tr.wt-idle:hover { opacity: .85; }
+
+  #lobby #player_list th.xl, #lobby #player_list th.turn, #lobby #player_list th.dur,
+  #lobby #player_list th.idle_time, #lobby #player_list th.spectator_count,
+  #lobby #player_list td.xl, #lobby #player_list td.turn, #lobby #player_list td.dur,
+  #lobby #player_list td.idle_time, #lobby #player_list td.spectator_count { text-align: right; }
+
+  #lobby #player_list td.username a:link, #lobby #player_list td.username a:visited,
+  #lobby #player_list td.username b { color: var(--wt-text); font-weight: 600; }
+  #lobby #player_list td.username a:hover { color: var(--wt-accent); }
+  #lobby #player_list td.game_id { font-family: var(--wt-mono); font-size: 12px; color: var(--wt-muted); }
+  #lobby #player_list td.game_id::before {
+    content: "";
+    display: inline-block;
+    width: 6px; height: 6px;
+    margin-right: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    vertical-align: 1px;
+  }
+  #lobby #player_list td.game_id:empty::before { display: none; }
+  #lobby #player_list td.game_id[data-kind="git"] { color: var(--wt-git); }
+  #lobby #player_list td.game_id[data-kind="seeded"] { color: var(--wt-seeded); }
+  #lobby #player_list td.game_id[data-kind="mode"] { color: var(--wt-mode); }
+  #lobby #player_list td.xl { color: var(--wt-text); font-weight: 600; }
+  #lobby #player_list td.char { font-family: var(--wt-mono); font-size: 13px; color: var(--wt-text); }
+  #lobby #player_list td.turn, #lobby #player_list td.dur, #lobby #player_list td.idle_time { color: var(--wt-muted); }
+  #lobby #player_list td.spectator_count { color: var(--wt-live); font-weight: 600; }
+  #lobby #player_list td.spectator_count:not(:empty)::before {
+    content: "";
+    display: inline-block;
+    width: 6px; height: 6px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: var(--wt-live);
+    box-shadow: 0 0 0 3px rgba(95, 208, 138, .15);
+    vertical-align: 1px;
+  }
+  #lobby #player_list th.milestone_col { width: auto; }
+  #lobby #player_list td.milestone_col { width: 100%; max-width: 0; color: var(--wt-muted); font-size: 13px; }
+  #lobby #player_list .milestone_container { height: 1.1em; line-height: 1.1em; overflow: hidden; }
+  #lobby #player_list .milestone, #lobby #player_list .new_milestone {
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  #player_list th.xl, #player_list th.turn, #player_list th.dur,
-  #player_list th.idle_time, #player_list th.spectator_count { text-align: right; }
-  #player_list .milestone { opacity: .85; }
 
-  /* dialogs and inputs keep working, just match the theme */
-  .floating_dialog {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 14px 18px;
-    color: var(--fg);
+  @media (max-width: 1100px) {
+    #lobby #player_list .turn, #lobby #player_list .idle_time { display: none; }
   }
-  .floating_dialog a.hide_dialog { color: var(--muted); }
-  input.text, textarea, select, .button, button {
-    background: var(--panel2);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    color: var(--fg);
-    padding: 3px 8px;
-    font-family: inherit;
+  @media (max-width: 900px) {
+    #lobby #player_list .milestone_col, #lobby #player_list .game_id { display: none; }
   }
-  .button:hover, input.button:hover, button:hover { border-color: var(--accent-dim); cursor: pointer; }
-  #admin_panel { background: var(--panel); border-radius: 10px; }
+  @media (max-width: 640px) {
+    #lobby { padding: 0 12px 32px; }
+    #lobby #player_list .god { display: none; }
+  }
 
-  /* recordings (DWEM WTRec) */
-  #wt-recs {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 10px 18px;
-    margin: 0 0 14px;
-  }
+  /* ---------- recordings (DWEM WTRec) ---------- */
+  #wt-recs { order: 3; }
   #wt-recs > summary {
-    cursor: pointer;
-    font-size: 11px;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    color: var(--muted);
-    list-style-position: inside;
-  }
-  #wt-recs[open] > summary { margin-bottom: 8px; }
-  #wt-recs .wt-recs-note { color: var(--muted); font-size: 13px; padding: 4px 0; }
-  #wt-recs .wt-rec {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 6px 0;
-    border-top: 1px solid #21262d;
-    font-size: 13px;
+    gap: 10px;
+    padding: 13px 18px;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
   }
-  #wt-recs .wt-rec .wt-rec-name { flex: 1 1 auto; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #wt-recs .wt-rec .wt-rec-meta { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-  #wt-recs .wt-rec button { padding: 2px 10px; font-size: 12px; }
-  #wt-recs .wt-rec button.wt-play { color: var(--accent); }
-  #wt-recs .wt-recs-top { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+  #wt-recs > summary::-webkit-details-marker { display: none; }
+  #wt-recs > summary::before {
+    content: "";
+    width: 6px; height: 6px;
+    margin: 0 2px 0 1px;
+    border-right: 1.5px solid var(--wt-muted);
+    border-bottom: 1.5px solid var(--wt-muted);
+    transform: rotate(-45deg);
+    transition: transform .15s;
+  }
+  #wt-recs[open] > summary::before { transform: rotate(45deg); }
+  #wt-recs[open] > summary { border-bottom: 1px solid var(--wt-border); }
+  #wt-recs .wt-pill:empty { display: none; }
+  #lobby #wt-recs .wt-recs-refresh { height: 26px; padding: 0 10px; font-size: 12px; display: none; }
+  #wt-recs[open] .wt-recs-refresh { display: inline-block; }
+  #wt-recs .wt-recs-note { padding: 14px 18px; color: var(--wt-muted); font-size: 13px; }
+  #wt-recs .wt-rec {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 18px;
+    padding: 9px 18px;
+    border-top: 1px solid var(--wt-border-soft);
+  }
+  #wt-recs .wt-rec:first-child { border-top: 0; }
+  #wt-recs .wt-rec:hover { background: var(--wt-hover); }
+  #wt-recs .wt-rec-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--wt-mono);
+    font-size: 13px;
+    color: var(--wt-text);
+  }
+  #wt-recs .wt-rec-meta { color: var(--wt-muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #wt-recs .wt-rec-actions { display: flex; gap: 6px; }
+  #lobby #wt-recs .wt-rec-actions button { height: 28px; padding: 0 11px; font-size: 12px; }
+  #lobby #wt-recs .wt-rec-actions button.wt-danger:hover { color: var(--wt-danger); border-color: rgba(240, 115, 115, .5); }
+
+  /* ---------- footer (server notes) ---------- */
+  #lobby > #banner { order: 4; }
+  #banner > #banner {
+    margin: 6px 0 0;
+    padding: 18px 2px 0;
+    border-top: 1px solid var(--wt-border);
+    background: none;
+    color: var(--wt-muted);
+    font-size: 12.5px;
+    line-height: 1.75;
+  }
+  #banner .wt-title { display: none; }
+  #banner > #banner > p {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: none !important;
+    border-radius: 0 !important;
+    line-height: 1.75 !important;
+  }
+  #lobby #banner a:link, #lobby #banner a:visited { color: var(--wt-text-2); }
+  #lobby #banner a:hover { color: var(--wt-accent); }
+
+  /* ---------- dialogs ---------- */
+  .floating_dialog {
+    min-width: 300px;
+    padding: 22px 24px;
+    background: var(--wt-surface);
+    border: 1px solid var(--wt-border);
+    border-radius: 14px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, .6);
+    color: var(--wt-text);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .floating_dialog label { display: block; margin: 12px 0 6px; font-size: 12px; font-weight: 600; color: var(--wt-text-2); }
+  .floating_dialog form > br { display: none; }
+  .floating_dialog input.text { width: 100%; }
+  .floating_dialog p { margin: 12px 0; color: var(--wt-muted); font-size: 12.5px; }
+  .floating_dialog input.button { margin: 14px 8px 0 0; }
+  .floating_dialog pre { white-space: pre-wrap; font-family: var(--wt-mono); font-size: 12.5px; color: var(--wt-text-2); }
+  #rc_edit textarea { width: min(88ch, 82vw); height: 62vh; }
+  #lobby .floating_dialog a.hide_dialog { color: var(--wt-muted); }
   `;
   var style = document.createElement('style');
   style.textContent = css;
@@ -226,56 +513,225 @@
     else if (!on && style.isConnected) style.remove();
   }
 
-  function collapseWS(root) {
-    var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    var n;
-    while ((n = w.nextNode())) {
-      if (n.nodeValue && /[\s\u00a0]/.test(n.nodeValue)) {
-        n.nodeValue = n.nodeValue.replace(/[ \t\r\n\u00a0]+/g, ' ');
-      }
-    }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
   }
 
-  // The server's play-now markup (game_links.html plus per-server separators) keeps
-  // the template's newlines and indentation and centres itself. Rebuild it into
-  // plain left-aligned rows split on <br>, whatever the server sent.
+  function squash(s) {
+    return String(s || '').replace(/[\s\u00a0]+/g, ' ').trim();
+  }
+
+  // ---- header: brand + nav links (taken from the server banner) + the login box ----
+  function ensureHeader() {
+    var bar = lobbyEl.querySelector('.login_placeholder');
+    if (!bar || bar.querySelector('.wt-brand')) return;
+    var brand = el('div', 'wt-brand');
+    brand.appendChild(el('span', 'wt-logo', 'CDI'));
+    brand.appendChild(el('span', 'wt-brand-name', 'WebTiles'));
+    var nav = el('nav');
+    nav.id = 'wt-nav';
+    bar.insertBefore(nav, bar.firstChild);
+    bar.insertBefore(brand, nav);
+
+    var u = document.getElementById('username');
+    var p = document.getElementById('password');
+    if (u && !u.placeholder) u.placeholder = 'Username';
+    if (p && !p.placeholder) p.placeholder = 'Password';
+  }
+
+  // Split a node's children into lines at <br>.
+  function splitLines(node) {
+    var lines = [[]];
+    Array.prototype.slice.call(node.childNodes).forEach(function (n) {
+      if (n.nodeType === 1 && n.tagName === 'BR') lines.push([]);
+      else lines[lines.length - 1].push(n);
+    });
+    return lines.filter(function (l) {
+      return l.some(function (n) { return n.nodeType === 1 || squash(n.nodeValue); });
+    });
+  }
+
+  // The banner is server HTML (re-sent on reconnect). It becomes the page footer;
+  // its first line of links moves into the header nav.
+  function tidyBanner() {
+    var inner = document.querySelector('#banner > #banner');
+    if (!inner || inner.getAttribute('data-wt') === '1') return;
+    inner.setAttribute('data-wt', '1');
+
+    for (var i = 0; i < inner.childNodes.length; i++) {
+      var n = inner.childNodes[i];
+      if (n.nodeType === 3 && squash(n.nodeValue)) {
+        var t = el('span', 'wt-title', squash(n.nodeValue));
+        inner.replaceChild(t, n);
+        if (t.nextSibling && t.nextSibling.tagName === 'BR') t.nextSibling.remove();
+        break;
+      }
+    }
+
+    if (CFG.hidePatreon) {
+      var link = inner.querySelector('a[href*="patreon"]');
+      if (link) (link.closest('div[style*="darkorange"]') || link.parentElement).remove();
+    }
+    Array.prototype.slice.call(inner.children).forEach(function (c) {
+      if (c.tagName === 'BR') c.remove();
+    });
+
+    var p = inner.querySelector('p');
+    if (!p) return;
+    var lines = splitLines(p);
+    var nav = document.getElementById('wt-nav');
+    var first = lines[0] || [];
+    var isNav = first.length && first.every(function (n) {
+      return (n.nodeType === 1 && n.tagName === 'A') || (n.nodeType === 3 && /^[\s\-|·•]*$/.test(n.nodeValue));
+    });
+    if (isNav && nav) {
+      nav.textContent = '';
+      first.forEach(function (n) { if (n.nodeType === 1) nav.appendChild(n.cloneNode(true)); });
+      lines.shift();
+    }
+
+    var notes = el('div', 'wt-notes');
+    lines.forEach(function (line) {
+      var d = el('div', 'wt-note');
+      line.forEach(function (n) { d.appendChild(n); });
+      if (d.firstChild && d.firstChild.nodeType === 3) d.firstChild.nodeValue = d.firstChild.nodeValue.replace(/^\s+/, '');
+      notes.appendChild(d);
+    });
+    p.replaceWith(notes);
+    if (CFG.hideServerNotes) notes.remove();
+  }
+
+  // ---- play now: rebuild the server's free-form links into version rows ----
+  // Anchors are moved, not cloned, so the client's .edit_rc_link click handlers survive.
   function layoutPlayNow() {
     var pn = document.getElementById('play_now');
-    if (!pn || pn.getAttribute('data-wt-rows') === '1') return;
-    if (!pn.querySelector('a')) return; // filled in after login
+    if (!pn || pn.querySelector('.wt-pn')) return;
+    var plays = Array.prototype.slice.call(pn.querySelectorAll('a[href^="#play-"]'));
+    if (!plays.length) return;
 
-    collapseWS(pn);
-    var rows = [], row = null;
-    var nodes = Array.prototype.slice.call(pn.childNodes);
-    for (var i = 0; i < nodes.length; i++) {
-      var nd = nodes[i];
-      if (nd.nodeType === 1 && nd.tagName === 'BR') {
-        if (row) rows.push(row);
-        row = null;
-        continue;
+    var groups = [], byVer = {};
+    var used = new Set();
+    plays.forEach(function (a) {
+      var id = a.getAttribute('href').slice(6);
+      var m = /^([^-]+)-(.+)$/.exec(id);
+      var mode = m ? m[1] : id;
+      var ver = m ? m[2] : '';
+      if (!byVer[ver]) {
+        var isGit = /git|trunk/i.test(ver);
+        byVer[ver] = { ver: ver, label: isGit ? 'trunk' : ver, isGit: isGit, games: [] };
+        groups.push(byVer[ver]);
       }
-      if (!row) {
-        row = document.createElement('div');
-        row.className = 'wt-row';
-      }
-      row.appendChild(nd);
-    }
-    if (row) rows.push(row);
+      var rc = null;
+      pn.querySelectorAll('.edit_rc_link').forEach(function (r) {
+        if (!rc && String(r.getAttribute('data-game_id')) === id) rc = r;
+      });
+      used.add(a);
+      if (rc) used.add(rc);
+      byVer[ver].games.push({ a: a, rc: rc, mode: mode, label: squash(a.textContent) || id });
+    });
 
-    while (pn.firstChild) pn.removeChild(pn.firstChild);
-    for (var j = 0; j < rows.length; j++) {
-      var r = rows[j];
-      if (!r.textContent.trim() && !r.querySelector('a')) continue;
-      var lead = r.firstChild;
-      while (lead && lead.nodeType === 3 && !lead.nodeValue.trim()) {
-        var next = lead.nextSibling;
-        r.removeChild(lead);
-        lead = next;
-      }
-      if (lead && lead.nodeType === 3) lead.nodeValue = lead.nodeValue.replace(/^\s+/, '');
-      pn.appendChild(r);
+    var root = el('div', 'wt-pn');
+    var head = el('div', 'wt-card-head');
+    head.appendChild(el('span', 'wt-card-title', 'Play'));
+    head.appendChild(el('span', 'wt-card-meta', 'rc edits the options file for that game'));
+    root.appendChild(head);
+
+    var wrap = el('div', 'wt-pn-groups');
+    groups.forEach(function (g) {
+      var row = el('div', 'wt-pn-group');
+      row.appendChild(el('div', 'wt-pn-ver' + (g.isGit ? ' is-git' : ''), g.label || '-'));
+      var games = el('div', 'wt-pn-games');
+      g.games.forEach(function (gm, i) {
+        var primary = gm.mode === 'dcss' || (i === 0 && !g.games.some(function (x) { return x.mode === 'dcss'; }));
+        var box = el('span', 'wt-game' + (primary ? ' is-primary' : ''));
+        gm.a.textContent = gm.label;
+        box.appendChild(gm.a);
+        if (gm.rc) {
+          gm.rc.textContent = 'rc';
+          gm.rc.title = 'Edit RC for ' + gm.a.getAttribute('href').slice(6);
+          box.appendChild(gm.rc);
+        }
+        games.appendChild(box);
+      });
+      row.appendChild(games);
+      wrap.appendChild(row);
+    });
+    root.appendChild(wrap);
+
+    var extras = Array.prototype.slice.call(pn.querySelectorAll('a')).filter(function (a) { return !used.has(a); });
+    if (extras.length) {
+      var ex = el('div', 'wt-pn-extra');
+      extras.forEach(function (a) { ex.appendChild(a); });
+      root.appendChild(ex);
     }
-    pn.setAttribute('data-wt-rows', '1');
+
+    pn.textContent = '';
+    pn.appendChild(root);
+  }
+
+  // ---- games table: the client swaps in a fresh clone on every update, so this
+  // runs synchronously from the observer (before paint) and must stay cheap ----
+  function gameKind(id) {
+    if (/git|trunk/i.test(id)) return 'git';
+    if (/^seeded/i.test(id)) return 'seeded';
+    if (/^(tut|sprint|descent|zotdef)/i.test(id)) return 'mode';
+    return 'stable';
+  }
+
+  function ensureGamesHead() {
+    var body = document.getElementById('lobby_body');
+    if (!body) return null;
+    var head = body.querySelector(':scope > .wt-card-head');
+    if (head) return head;
+    var span = body.querySelector(':scope > span');
+    head = el('div', 'wt-card-head');
+    head.appendChild(el('span', 'wt-card-title', 'Games running'));
+    head.appendChild(el('span', 'wt-pill wt-count', '0'));
+    var meta = el('span', 'wt-card-meta');
+    meta.appendChild(el('span', 'wt-live-dot'));
+    meta.appendChild(el('span', 'wt-watch', ''));
+    head.appendChild(meta);
+    if (span) span.replaceWith(head);
+    else body.insertBefore(head, body.firstChild);
+    return head;
+  }
+
+  function setText(node, v) {
+    if (node && node.textContent !== v) node.textContent = v;
+  }
+
+  function decorateTable() {
+    var t = document.getElementById('player_list');
+    if (!t || !t.tBodies[0]) return;
+    var head = ensureGamesHead();
+    var rows = t.tBodies[0].rows, specs = 0, watched = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var idle = r.querySelector('td.idle_time');
+      var secs = idle ? parseInt(idle.getAttribute('data-time'), 10) || 0 : 0;
+      var dim = CFG.idleDimSeconds > 0 && secs >= CFG.idleDimSeconds;
+      if (r.classList.contains('wt-idle') !== dim) r.classList.toggle('wt-idle', dim);
+
+      var g = r.querySelector('td.game_id');
+      if (g) {
+        var k = gameKind(g.textContent);
+        if (g.getAttribute('data-kind') !== k) g.setAttribute('data-kind', k);
+      }
+      var sc = r.querySelector('td.spectator_count');
+      var n = sc ? parseInt(sc.textContent, 10) || 0 : 0;
+      if (n) { specs += n; watched++; }
+
+      var ms = r.querySelector('.milestone');
+      if (ms && ms.title !== ms.textContent) ms.title = ms.textContent;
+    }
+    if (head) {
+      setText(head.querySelector('.wt-count'), String(rows.length));
+      setText(head.querySelector('.wt-watch'),
+        specs ? specs + (specs === 1 ? ' spectator' : ' spectators') + ' on ' + watched + (watched === 1 ? ' game' : ' games') : 'no spectators');
+    }
   }
 
 
@@ -291,32 +747,32 @@
     if (recsEl && recsEl.isConnected) return;
     var body = document.getElementById('lobby_body');
     if (!body || !body.parentNode) return;
-    recsEl = document.createElement('details');
+    recsEl = el('details');
     recsEl.id = 'wt-recs';
-    var sum = document.createElement('summary');
-    sum.textContent = 'Recordings';
-    var box = document.createElement('div');
-    box.className = 'wt-recs-body';
+    var sum = el('summary');
+    sum.appendChild(el('span', 'wt-card-title', 'Recordings'));
+    sum.appendChild(el('span', 'wt-pill wt-recs-count', ''));
+    sum.appendChild(el('span', 'wt-card-meta', 'DWEM WTRec, saved in this browser'));
+    var refresh = mkBtn('Refresh', 'wt-recs-refresh', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      loadRecs();
+    });
+    sum.appendChild(refresh);
     recsEl.appendChild(sum);
-    recsEl.appendChild(box);
-    body.parentNode.insertBefore(recsEl, body);
+    recsEl.appendChild(el('div', 'wt-recs-body'));
+    body.parentNode.insertBefore(recsEl, body.nextSibling);
     recsEl.addEventListener('toggle', function () { if (recsEl.open) loadRecs(); });
   }
 
   function note(box, text) {
     box.textContent = '';
-    var d = document.createElement('div');
-    d.className = 'wt-recs-note';
-    d.textContent = text;
-    box.appendChild(d);
-    return d;
+    return box.appendChild(el('div', 'wt-recs-note', text));
   }
 
   function mkBtn(label, cls, fn) {
-    var b = document.createElement('button');
+    var b = el('button', cls, label);
     b.type = 'button';
-    b.textContent = label;
-    if (cls) b.className = cls;
     b.addEventListener('click', fn);
     return b;
   }
@@ -329,36 +785,29 @@
 
   async function loadRecs() {
     var box = recsEl.querySelector('.wt-recs-body');
+    var count = recsEl.querySelector('.wt-recs-count');
     var W = wtrec();
     if (!W) {
-      note(box, 'WTRec is not loaded (DWEM still starting, or the module is off). Close and reopen this section in a moment.');
+      note(box, 'WTRec is not loaded (DWEM still starting, or the module is off). Try Refresh in a moment.');
       return;
     }
-    note(box, 'Loading...');
+    note(box, 'Loading…');
     var list;
     try { list = (await W.listSessions()).reverse(); }
     catch (e) { note(box, 'Could not read the recordings: ' + e); return; }
+    count.textContent = list.length ? String(list.length) : '';
     if (!list.length) {
       note(box, 'No recordings yet. With record_wtrec = true in your RC, play a game and return to the lobby; it is saved here.');
       return;
     }
     box.textContent = '';
-    var top = document.createElement('div');
-    top.className = 'wt-recs-top';
-    top.appendChild(mkBtn('Refresh', '', loadRecs));
-    box.appendChild(top);
     list.forEach(function (s) {
-      var row = document.createElement('div');
-      row.className = 'wt-rec';
-      var nm = document.createElement('span');
-      nm.className = 'wt-rec-name';
-      nm.textContent = s.name;
-      var meta = document.createElement('span');
-      meta.className = 'wt-rec-meta';
-      meta.textContent = fmtDate(s.createdAt) + (s.data ? '  ' + s.data.length + ' msgs' : '');
-      row.appendChild(nm);
-      row.appendChild(meta);
-      row.appendChild(mkBtn('Play', 'wt-play', async function () {
+      var row = el('div', 'wt-rec');
+      row.appendChild(el('span', 'wt-rec-name', s.name));
+      row.appendChild(el('span', 'wt-rec-meta',
+        fmtDate(s.createdAt) + (s.data ? '  ·  ' + s.data.length.toLocaleString() + ' msgs' : '')));
+      var acts = el('span', 'wt-rec-actions');
+      acts.appendChild(mkBtn('Play', 'wt-primary', async function () {
         try {
           var full = await W.getSession(s.name);
           if (!full) return note(box, 'That recording is gone.');
@@ -366,7 +815,7 @@
           W.playWTRec(blob);
         } catch (e) { console.error('[lobby] play recording failed', e); alert('Could not play it: ' + e); }
       }));
-      row.appendChild(mkBtn('Download', '', async function () {
+      acts.appendChild(mkBtn('Download', '', async function () {
         try {
           var full = await W.getSession(s.name);
           if (!full) return;
@@ -377,50 +826,24 @@
           document.body.appendChild(a);
           a.click();
           a.remove();
+          setTimeout(function () { URL.revokeObjectURL(a.href); }, 10000);
         } catch (e) { alert('Could not download it: ' + e); }
       }));
-      row.appendChild(mkBtn('Delete', '', async function () {
+      acts.appendChild(mkBtn('Delete', 'wt-danger', async function () {
         if (!confirm('Delete recording ' + s.name + '?')) return;
         try { await W.deleteSession(s.name); } catch (e) { alert('Could not delete it: ' + e); }
         loadRecs();
       }));
+      row.appendChild(acts);
       box.appendChild(row);
     });
   }
 
   function tidy() {
+    ensureHeader();
+    tidyBanner();
     layoutPlayNow();
     ensureRecs();
-    var inner = document.querySelector('#banner > #banner');
-    if (!inner) return;
-
-    // title line as its own block
-    if (!inner.querySelector('.wt-title')) {
-      for (var i = 0; i < inner.childNodes.length; i++) {
-        var n = inner.childNodes[i];
-        if (n.nodeType === 3 && n.textContent.trim()) {
-          var t = document.createElement('div');
-          t.className = 'wt-title';
-          t.textContent = n.textContent.trim();
-          inner.replaceChild(t, n);
-          break;
-        }
-      }
-    }
-
-    if (CFG.hidePatreon) {
-      var link = inner.querySelector('a[href*="patreon"]');
-      if (link) {
-        var box = link.closest('div[style*="darkorange"]') || link.parentElement;
-        box.remove();
-      }
-    }
-
-    if (CFG.hideServerNotes) {
-      var p = inner.querySelector('p');
-      if (p && /code of conduct/i.test(p.textContent)) p.remove();
-    }
-
     if (CFG.hideLoginForm) {
       var f = document.getElementById('login_form');
       if (f && f.style.display !== 'none') f.style.display = 'none';
@@ -429,16 +852,18 @@
 
   sync();
   tidy();
+  decorateTable();
 
   var pending = false;
   function later() {
     if (pending) return;
     pending = true;
-    setTimeout(function () { pending = false; sync(); tidy(); }, 50);
+    setTimeout(function () { pending = false; sync(); tidy(); decorateTable(); }, 50);
   }
 
-  // #play_now and the game table are filled in after login; the lobby is also
-  // hidden and shown again when a game starts or ends, all without a reload.
-  new MutationObserver(later).observe(document.body, { childList: true, subtree: true });
+  // #play_now and the game table are filled in after login; the table is replaced
+  // on every lobby update; the lobby is hidden and shown again around games.
+  new MutationObserver(function () { decorateTable(); later(); })
+    .observe(document.body, { childList: true, subtree: true });
   new MutationObserver(later).observe(lobbyEl, { attributes: true, attributeFilter: ['style', 'class'] });
 })();
