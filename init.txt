@@ -63,9 +63,9 @@ fx_hop_height = 0.12
 fx_bump_anim = true
 fx_bump_ms = 190
 fx_light = true
-fx_light_radius = 8
-fx_light_edge = 0.72
-fx_light_shadow = 0.55
+fx_light_radius = 7.5
+fx_light_edge = 0.85
+fx_light_shadow = 0.7
 fx_light_ambient = 0.38
 
 ##### Sound (DWEM SoundSupport) #####
