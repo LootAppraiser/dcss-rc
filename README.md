@@ -16,7 +16,7 @@ turns, and open an issue with it.
 | Part | Needs |
 |---|---|
 | Plain crawl options (travel, explore, safety, autofight, menus) | nothing |
-| `tile_font_*` lines | the [Maple Mono NF](https://github.com/subframe7536/maple-font) font installed on your computer (otherwise delete those lines) |
+| Maple Mono font in game and the cleaner CDI lobby | [`userscripts/cdi-webtiles-polish.user.js`](userscripts/cdi-webtiles-polish.user.js) in Tampermonkey (loads the font as woff2 from this repo, nothing to install) |
 | `sounds_on`, `sound_pack`, `bgm_volume`, `show_gold_status` | [DWEM](https://github.com/refracta/dcss-webtiles-extension-module) in Tampermonkey (sound packs, gold in the status panel) |
 | `record_wtrec` | DWEM (its WTRec module records games in your browser; `/wtrec list` in chat shows them) |
 | `fx_*` lines | [dcss-fx](https://github.com/LootAppraiser/dcss-fx) (smooth movement, attack effects, light) on top of DWEM |
@@ -31,7 +31,7 @@ nothing; crawl may mention them as unknown options at startup, which is harmless
   yours to choose.
 - **Travel / explore**: single-step travel at 20 ms, explore wall bias, a tuned list of things explore stops for.
 - **Safety**: confirm risky spell failure rates and one-way hatches, capital-Y confirmations, autofight stops below 75% HP.
-- **Display**: fonts and sizes, 2x map scale, bigger action panel.
+- **Display**: font sizes, 2x map scale, bigger action panel.
 - **Keys**: `Ctrl-Tab` autofight without moving, `Ctrl-D` travel to the nearest `>` and descend, `Ctrl-E` go up.
 - **BRC features** (full build, only these modules): monster danger alerts, rest until fully recovered,
   item stat inscriptions (AC/EV/damage), spell-level and faith-amulet alerts, quiver reminders, safe stairs.
@@ -42,9 +42,11 @@ nothing; crawl may mention them as unknown options at startup, which is harmless
 - Anything under a `##### lua/features/NAME.lua #####` banner is one BRC feature: delete that whole block to
   drop it (BRC finds features by itself, nothing else needs editing).
 - BRC's own settings are the `brc_config_custom` table near the top of the Lua section.
-- Personal taste lives in the first ~100 lines: delays, fonts, sizes, `fx_*` tuning, keys.
+- Personal taste lives in the first ~100 lines: delays, font sizes, `fx_*` tuning, keys.
 
 ## Credits and license
 
 MIT, see [LICENSE](LICENSE). The Lua section is BRC by Brian Faires (MIT), see [NOTICE](NOTICE) for what is
-included and the one change made to it.
+included and the one change made to it. The Maple Mono font files in [`fonts/maple-mono`](fonts/maple-mono)
+are from [subframe7536/maple-font](https://github.com/subframe7536/maple-font) v7.9 (no-ligature build), SIL Open
+Font License 1.1, see [`fonts/maple-mono/OFL.txt`](fonts/maple-mono/OFL.txt).

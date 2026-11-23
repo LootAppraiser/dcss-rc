@@ -1,5 +1,5 @@
 ##### CDI (crawl.dcss.io) RC ###########################
-# Plain options first, then fonts/sound/keys, then the BRC Lua code at the bottom.
+# Plain options first, then font sizes/sound/keys, then the BRC Lua code at the bottom.
 # Lines starting with # are comments.
 # Contains code from BRC (Buehler RC, MIT): https://github.com/brianfaires/crawl-rc - see NOTICE in the repo.
 # This RC lives at https://github.com/LootAppraiser/dcss-rc
@@ -43,11 +43,8 @@ autofight_caught = true
 # Inventory/pickup menus: equipped first, then artefacts, egos, then by name
 sort_menus = true:equipped,art,ego,basename,identified,qualname,>qty
 
-##### Display / fonts #####
-tile_font_msg_family  = Maple Mono NF
-tile_font_stat_family = Maple Mono NF
-tile_font_crt_family  = Maple Mono NF
-tile_font_lbl_family  = Maple Mono NF
+##### Display / font sizes #####
+# The font itself (Maple Mono) comes from userscripts/cdi-webtiles-polish.user.js.
 tile_font_msg_size  = 24
 tile_font_stat_size = 24
 tile_font_crt_size  = 24

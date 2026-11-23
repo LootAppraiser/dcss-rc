@@ -34,3 +34,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+----------------------------------------------------------------------------------------------------
+Third-party font in fonts/maple-mono
+====================================
+
+MapleMonoNL-{Regular,Medium,SemiBold,Bold}.woff2 are unmodified files from the Maple Mono v7.9 release
+(MapleMonoNL-Woff2.zip, renamed from *.ttf.woff2), https://github.com/subframe7536/maple-font.
+Copyright 2022 The Maple Mono Project Authors. Licensed under the SIL Open Font License, Version 1.1;
+the full license is in fonts/maple-mono/OFL.txt.

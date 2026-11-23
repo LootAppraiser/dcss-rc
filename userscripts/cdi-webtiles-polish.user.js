@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         CDI Lobby Polish
+// @name         CDI WebTiles Polish
 // @namespace    https://github.com/LootAppraiser
-// @version      2.0.0
-// @description  Clean crawl.dcss.io lobby: header bar, card layout, readable games table, grouped Play buttons, DWEM recordings list
+// @version      2.1.0
+// @description  crawl.dcss.io: Maple Mono (woff2) everywhere in game and lobby, plus a clean lobby with a header bar, grouped Play buttons, a readable games table and the DWEM recordings list
 // @match        https://crawl.dcss.io/*
 // @run-at       document-idle
 // @grant        none
@@ -11,27 +11,78 @@
 (function () {
   'use strict';
 
-  // Only ever style the lobby. The game view reuses this page (same document, no
-  // reload), so the <style> tag is attached only while #lobby is on screen.
-  var lobbyEl = document.getElementById('lobby');
-  if (!lobbyEl) return;
-
   var CFG = {
+    gameFont: true,         // Maple Mono for all in-game text (messages, stats, menus, map glyphs, action panel)
+    lobbyTheme: true,       // the lobby redesign below
     hidePatreon: true,
     hideServerNotes: false, // the SSH / Code of Conduct / contact lines in the footer
     hideLoginForm: false,
     idleDimSeconds: 300,    // rows idle at least this long are dimmed (0 = never)
   };
 
-  // Maple Mono (OFL-1.1): a local install wins, else the fontsource woff2.
-  var FONT_CDN = 'https://cdn.jsdelivr.net/npm/@fontsource/maple-mono@5.3.0/files/maple-mono-latin-';
-  var fontFaces = [[400, 'Regular'], [500, 'Medium'], [600, 'SemiBold'], [700, 'Bold']].map(function (w) {
-    return '@font-face { font-family: "WT Maple Mono"; font-style: normal; font-weight: ' + w[0] + '; font-display: swap; ' +
-      'src: local("Maple Mono ' + w[1] + '"), local("MapleMono-' + w[1] + '"), local("Maple Mono NF ' + w[1] + '"), local("MapleMono-NF-' + w[1] + '"), ' +
-      'url("' + FONT_CDN + w[0] + '-normal.woff2") format("woff2"); }';
+  // ---- font: Maple Mono NL (no ligatures, OFL-1.1) as woff2 ----
+  // Full-coverage files live in this repo (fonts/maple-mono); the fontsource
+  // latin subset is the fallback if jsDelivr can't serve them.
+  var FONT = 'WT Maple Mono';
+  var FONT_REPO = 'https://cdn.jsdelivr.net/gh/LootAppraiser/dcss-rc@main/fonts/maple-mono/MapleMonoNL-';
+  var FONT_NPM = 'https://cdn.jsdelivr.net/npm/@fontsource/maple-mono@5.3.0/files/maple-mono-latin-';
+  var WEIGHTS = [[400, 'Regular'], [500, 'Medium'], [600, 'SemiBold'], [700, 'Bold']];
+  var fontFaces = WEIGHTS.map(function (w) {
+    return '@font-face { font-family: "' + FONT + '"; font-style: normal; font-weight: ' + w[0] + '; font-display: swap; ' +
+      'src: url("' + FONT_REPO + w[1] + '.woff2") format("woff2"), url("' + FONT_NPM + w[0] + '-normal.woff2") format("woff2"); }';
   }).join('\n');
 
-  var css = fontFaces + `
+  var fontStyle = document.createElement('style');
+  fontStyle.id = 'wt-font';
+  fontStyle.textContent = fontFaces + (CFG.gameFont ? `
+  /* the game sets these inline on <html> from the tile_font_* options; !important wins over that */
+  :root {
+    --crt-font: "${FONT}", "DejaVu Sans Mono", monospace !important;
+    --msg-font: "${FONT}", "DejaVu Sans Mono", monospace !important;
+    --stat-font: "${FONT}", "DejaVu Sans Mono", monospace !important;
+    --lbl-font: "${FONT}", "DejaVu Sans Mono", monospace !important;
+    --action-font: "${FONT}", "DejaVu Sans Mono", monospace !important;
+  }` : '');
+  document.head.appendChild(fontStyle);
+
+  if (CFG.gameFont) {
+    // Canvas text (glyph-mode map, action panel counts) is drawn with plain
+    // "Npx monospace" font strings; point those at Maple Mono too.
+    var proto = window.CanvasRenderingContext2D && CanvasRenderingContext2D.prototype;
+    var fontDesc = proto && Object.getOwnPropertyDescriptor(proto, 'font');
+    if (fontDesc && fontDesc.set && !proto.__wtFont) {
+      var fontCache = new Map();
+      var mapFont = function (v) {
+        if (typeof v !== 'string' || v.indexOf(FONT) !== -1) return v;
+        var out = fontCache.get(v);
+        if (out === undefined) {
+          out = v.replace(/(^|[\s,])monospace\s*$/i, '$1"' + FONT + '", monospace');
+          if (fontCache.size < 500) fontCache.set(v, out);
+        }
+        return out;
+      };
+      Object.defineProperty(proto, 'font', {
+        configurable: true,
+        enumerable: fontDesc.enumerable,
+        get: fontDesc.get,
+        set: function (v) { fontDesc.set.call(this, mapFont(v)); },
+      });
+      proto.__wtFont = true;
+    }
+    // Canvas never triggers a webfont load by itself in time for the first frame
+    // (and the glyph-mode cell size is measured once at game start), so load now.
+    if (document.fonts && document.fonts.load) {
+      WEIGHTS.forEach(function (w) { document.fonts.load(w[0] + ' 16px "' + FONT + '"').catch(function () {}); });
+    }
+  }
+
+  // ---- lobby ----
+  // The game view reuses this page (same document, no reload), so the lobby
+  // <style> tag is attached only while #lobby is on screen.
+  var lobbyEl = document.getElementById('lobby');
+  if (!lobbyEl || !CFG.lobbyTheme) return;
+
+  var css = `
   :root {
     --wt-bg: #0b0d11;
     --wt-surface: #12151b;
